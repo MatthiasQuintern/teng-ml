@@ -1,25 +1,95 @@
 
-def load_data():
-    # Build the category_lines dictionary, a list of names per language
-    category_lines = {}
-    all_categories = []
+from os import path, listdir
+import re
+import numpy as np
+import pandas as pd
 
-    def find_files(path):
-        return glob.glob(path)
+from sklearn.model_selection import train_test_split
 
-    # Read a file and split into lines
-    def read_lines(filename):
-        lines = io.open(filename, encoding='utf-8').read().strip().split('\n')
-        return [unicode_to_ascii(line) for line in lines]
+# groups: date, name, voltage, distance, index
+re_filename = r"(\d{4}-\d{2}-\d{2})_([a-zA-Z]+)_(\d{1,2}(?:\.\d*)?)V_(\d+(?:\.\d*)?)mm(\d+).csv"
 
-    for filename in find_files('data/names/*.txt'):
-        category = os.path.splitext(os.path.basename(filename))[0]
-        all_categories.append(category)
+class LabelConverter:
+    def __init__(self, class_labels):
+        self.class_labels = class_labels.copy()
+        self.class_labels.sort()
 
-        lines = read_lines(filename)
-        category_lines[category] = lines
+    def get_one_hot(self, label):
+        """return one hot vector for given label"""
+        vec = np.zeros(len(self.class_labels), dtype=np.float32)
+        vec[self.class_labels.index(label)] = 1.0
+        return vec
 
-    return category_lines, all_categories
+    def __getitem__(self, index):
+        return self.class_labels[index]
+
+    def __contains__(self, value):
+        return value in self.class_labels
+
+    def get_labels(self):
+        return self.class_labels.copy()
 
 
 
+class Datasample:
+    def __init__(self, date: str, label: str, voltage: str, distance: str, index: str, label_vec, datapath: str):
+        self.date = date
+        self.label = label
+        self.voltage = float(voltage)
+        self.distance = float(distance)
+        self.index = int(index)
+        self.label_vec = label_vec
+        self.datapath = datapath
+        self.data = None
+
+    def __repr__(self):
+        size = self.data.size if self.data else "Unknown"
+        return f"{self.label}-{self.index}: dimension={size}, recorded at {self.date} with U={self.voltage}V, d={self.distance}mm"
+
+    def _load_data(self):
+        df = pd.read_csv(self.datapath)
+        self.data = df.to_numpy()
+
+    def get_data(self):
+        """[[timestamps, idata, vdata]]"""
+        if not self.data:
+            self._load_data()
+        return self.data
+
+class Dataset:
+    """
+    Store the whole dataset, compatible with torch.data.Dataloader
+    """
+    def __init__(self, datasamples):
+        self.datasamples = datasamples
+        # self.labels = [ d.label_vec for d in datasamples ]
+        # self.data = [ d.get_data() for d in datasamples ]
+
+    def __getitem__(self, index):
+        return self.datasamples[index].get_data(), self.datasamples[index].label_vec
+
+    def __len__(self):
+        return len(self.datasamples)
+
+def load_datasets(datadir, labels: LabelConverter, voltage=None, train_to_test_ratio=0.7, random_state=None):
+    """
+    load all data from datadir that are in the format: yyyy-mm-dd_label_x.xV_xxxmm.csv
+    """
+    datasamples = []
+    files = listdir(datadir)
+    files.sort()
+    for file in files:
+        match = re.fullmatch(re_filename, file)
+        if not match: continue
+
+        label = match.groups()[1]
+        if label not in labels: continue
+
+        sample_voltage = float(match.groups()[2])
+        if voltage and voltage != sample_voltage: continue
+
+        datasamples.append(Datasample(*match.groups(), labels.get_one_hot(label), datadir + "/" + file))
+    train_samples, test_samples = train_test_split(datasamples, train_size=train_to_test_ratio, shuffle=True, random_state=random_state)
+    train_dataset = Dataset(train_samples)
+    test_dataset = Dataset(test_samples)
+    return train_dataset, test_dataset
