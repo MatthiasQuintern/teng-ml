@@ -26,6 +26,9 @@ class LabelConverter:
     def __contains__(self, value):
         return value in self.class_labels
 
+    def __len__(self):
+        return len(self.class_labels)
+
     def get_labels(self):
         return self.class_labels.copy()
 
@@ -52,7 +55,7 @@ class Datasample:
 
     def get_data(self):
         """[[timestamps, idata, vdata]]"""
-        if not self.data:
+        if self.data is None:
             self._load_data()
         return self.data
 

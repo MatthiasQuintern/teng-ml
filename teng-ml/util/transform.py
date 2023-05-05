@@ -20,6 +20,9 @@ class Normalize:
         a -= self.low
         return a
 
+    def __repr__(self):
+        return f"Normalize(low={self.low}, high={self.high})"
+
 
 class ConstantInterval:
     """
@@ -48,4 +51,7 @@ class ConstantInterval:
         return avg_interval
         # sug_interval = 0.5 * avg_interval
         # print(f"Average interval: {avg_interval}, Suggestion: {sug_interval}")
+
+    def __repr__(self):
+        return f"ConstantInterval(interval={self.interval})"
 
