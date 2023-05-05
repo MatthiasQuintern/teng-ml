@@ -11,10 +11,10 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import torch
 import torch.nn as nn
+import torch.nn.utils.rnn as rnn_utils
 from torch.utils.data import DataLoader
 
-
-from .util.transform import ConstantInterval
+from .util.transform import ConstantInterval, Normalize
 from .util.data_loader import load_datasets, LabelConverter
 
 def test_interpol():
@@ -24,7 +24,7 @@ def test_interpol():
     array = df.to_numpy()
     print(ConstantInterval.get_average_interval(array[:,0]))
     transformer = ConstantInterval(0.05)
-    interp_array = transformer(array[:,0], array[:,2])
+    interp_array = transformer(array[:,[0,2]])
 
     fig1, ax1 = plt.subplots()
     ax1.plot(interp_array[:,0], interp_array[:,1], color="r", label="Interpolated")
@@ -42,15 +42,22 @@ if __name__ == "__main__":
     )
     print(f"Using device: {device}")
 
-    labels = LabelConverter(["foam", "glass", "kapton", "foil"])
-    train_set, test_set = load_datasets("/home/matth/data", labels, voltage=8.2)
+    labels = LabelConverter(["foam", "glass", "kapton", "foil", "cloth", "rigid_foam"])
+    t_const_int = ConstantInterval(0.01)
+    t_norm = Normalize(0, 1)
+    train_set, test_set = load_datasets("/home/matth/Uni/TENG/testdata", labels, voltage=8.2, transforms=[t_const_int], train_to_test_ratio=0.7, random_state=42)
 
     # train_loader = iter(DataLoader(train_set))
     # test_loader = iter(DataLoader(test_set))
-    # sample = next(train_loader)
-    # print(sample)
-    train_loader = iter(DataLoader(train_set))
-    test_loader = iter(DataLoader(test_set))
+    train_loader = iter(DataLoader(train_set, batch_size=3, shuffle=True))
+    test_loader = iter(DataLoader(test_set, batch_size=3, shuffle=True))
+
+    sample = next(train_loader)
+    print(sample)
+
+    feature_count = 1
+
+
     class RNN(nn.Module):
         def __init__(self, input_size, hidden_size, num_layers, num_classes, if_bidirectional):
             super(RNN, self).__init__()
@@ -58,6 +65,7 @@ if __name__ == "__main__":
             self.hidden_size = hidden_size
             self.if_bidirectional = if_bidirectional
             self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=if_bidirectional)
+            # x = (batch_size, sequence, feature)
 
             if if_bidirectional == True:
               self.fc = nn.Linear(hidden_size * 2, num_classes)
@@ -66,14 +74,21 @@ if __name__ == "__main__":
 
 
         def forward(self, x):
+            print(f"forward pass")
             D = 2 if self.if_bidirectional == True else 1
-            Batch = x.batch_sizes[0]
 
-            h0 = torch.zeros(D * self.num_layers, Batch, self.hidden_size).to(device)
-            c0 = torch.zeros(D * self.num_layers, Batch, self.hidden_size).to(device)
+            print(f"x({x.shape})={x}")
+            batch_size = x.shape[1]
+            print(f"batch_size={batch_size}")
+
+            h0 = torch.zeros(D * self.num_layers, batch_size, self.hidden_size).to(device)
+            print(f"h0={h0}")
+            c0 = torch.zeros(D * self.num_layers, batch_size, self.hidden_size).to(device)
             x.to(device)
             _, (h_n, _) = self.lstm(x, (h0, c0))
-            final_state  = h_n.view(self.num_layers, D, Batch, self.hidden_size)[-1]     # num_layers, num_directions, batch, hidden_size
+            print(f"h_n={h_n}")
+            final_state  = h_n.view(self.num_layers, D, batch_size, self.hidden_size)[-1]     # num_layers, num_directions, batch, hidden_size
+            print(f"final_state={final_state}")
 
             if D == 1:
               X = final_state.squeeze()
@@ -81,12 +96,14 @@ if __name__ == "__main__":
               h_1, h_2 = final_state[0], final_state[1]  # forward & backward pass
               #X = h_1 + h_2                # Add both states
               X = torch.cat((h_1, h_2), 1)         # Concatenate both states, X-size: (Batch, hidden_size * 2）
-
+            else:
+                raise ValueError("D must be 1 or 2")
             output = self.fc(X) # fully-connected layer
+            print(f"out={output}")
 
             return output
 
-    model = RNN(input_size = 1, hidden_size = 8, num_layers = 3, num_classes = 18, if_bidirectional = True).to(device)
+    model=RNN(input_size=1, hidden_size=8, num_layers=3, num_classes=18, if_bidirectional=True).to(device)
     loss_func = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.02)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
@@ -99,34 +116,47 @@ if __name__ == "__main__":
         train_total = 0
         val_correct = 0
         val_total = 0
-        for (x, y), length in train_loader: 
+        for data, y in train_loader:
+            # data = batch, seq, features
+            print(ep, "Train")
+            print(f"data({data.shape})={data}")
+            x = data[:,:,2]   # select voltage data
+            print(f"x({x.shape})={x}")
+            length = torch.tensor([x.shape[1] for _ in range(x.shape[0])], dtype=torch.int64)
+            print(f"length({length.shape})={length}")
             batch_size = x.shape[0]
-            v = x.view(batch_size, -1, nFeatrue)
-            data = rnn_utils.pack_padded_sequence(v.type(torch.FloatTensor), length, batch_first=True).to(device)
+            print(f"batch_size={batch_size}")
+            v = x.view(batch_size, -1, feature_count)
+            data = rnn_utils.pack_padded_sequence(v.type(torch.FloatTensor), length, batch_first=True).to(device)[0]
             # print(data.batch_sizes[0])
             # print(data)
             out = model(data)
-            loss = loss_func(out, y) 
+            loss = loss_func(out, y)
             # print(loss)
 
             optimizer.zero_grad()   # clear gradients for next train
             loss.backward()         # backpropagation, compute gradients
             optimizer.step()        # apply gradients
-            
+
             predicted = torch.max(torch.nn.functional.softmax(out), 1)[1]
             train_total += y.size(0)
             train_correct += (predicted == y).sum().item()
 
-
         scheduler.step()
-        
-        for (x, y), length in test_loader: 
+
+        for data, y in test_loader:
+            print(ep, "Test")
+            x = data[:,2]
+            print(f"x({x.shape})={x}")
+            length = torch.tensor(x.shape[0], dtype=torch.int64)
+            print(f"length={length}")
             batch_size = x.shape[0]
-            v = x.view(batch_size, -1, nFeatrue)
+            print(f"batch_size={batch_size}")
+            v = x.view(batch_size, -1, feature_count)
             data = rnn_utils.pack_padded_sequence(v.type(torch.FloatTensor), length, batch_first=True).to(device)
             out = model(data)
-            loss = loss_func(out, y)     
-            
+            loss = loss_func(out, y)
+
             predicted = torch.max(torch.nn.functional.softmax(out), 1)[1]
             val_total += y.size(0)
             val_correct += (predicted == y).sum().item()

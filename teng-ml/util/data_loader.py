@@ -60,18 +60,26 @@ class Dataset:
     """
     Store the whole dataset, compatible with torch.data.Dataloader
     """
-    def __init__(self, datasamples):
+    def __init__(self, datasamples, transforms=None):
         self.datasamples = datasamples
+        self.transforms = transforms
         # self.labels = [ d.label_vec for d in datasamples ]
         # self.data = [ d.get_data() for d in datasamples ]
 
     def __getitem__(self, index):
-        return self.datasamples[index].get_data(), self.datasamples[index].label_vec
+        data, label = self.datasamples[index].get_data(), self.datasamples[index].label_vec
+        if type(self.transforms) == list:
+            for t in self.transforms:
+                data = t(data)
+        elif self.transforms:
+            data = self.transforms(data)
+        # TODO
+        return data[:400], label
 
     def __len__(self):
         return len(self.datasamples)
 
-def load_datasets(datadir, labels: LabelConverter, voltage=None, train_to_test_ratio=0.7, random_state=None):
+def load_datasets(datadir, labels: LabelConverter, transforms=None, voltage=None, train_to_test_ratio=0.7, random_state=None):
     """
     load all data from datadir that are in the format: yyyy-mm-dd_label_x.xV_xxxmm.csv
     """
@@ -90,6 +98,6 @@ def load_datasets(datadir, labels: LabelConverter, voltage=None, train_to_test_r
 
         datasamples.append(Datasample(*match.groups(), labels.get_one_hot(label), datadir + "/" + file))
     train_samples, test_samples = train_test_split(datasamples, train_size=train_to_test_ratio, shuffle=True, random_state=random_state)
-    train_dataset = Dataset(train_samples)
-    test_dataset = Dataset(test_samples)
+    train_dataset = Dataset(train_samples, transforms=transforms)
+    test_dataset = Dataset(test_samples, transforms=transforms)
     return train_dataset, test_dataset

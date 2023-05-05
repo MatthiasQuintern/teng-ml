@@ -31,7 +31,7 @@ class RNN(nn.Module):
       X = final_state.squeeze()
     elif D == 2:
       h_1, h_2 = final_state[0], final_state[1]  # forward & backward pass
-      #X = h_1 + h_2                # Add both states
+      # X = h_1 + h_2                # Add both states
       X = torch.cat((h_1, h_2), 1)         # Concatenate both states, X-size: (Batch, hidden_size * 2）
 
     output = self.fc(X) # fully-connected layer

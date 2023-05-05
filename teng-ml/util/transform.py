@@ -25,20 +25,24 @@ class ConstantInterval:
     """
     Interpolate the data to have a constant interval / sample rate,
     so that 1 index step is always equivalent to a certain time step
-    Expects: timestamps, idata, vdata
     """
     def __init__(self, interval):
         self.interval = interval
 
-    def __call__(self, timestamps, data):
-        interp = interp1d(timestamps, data)
-        new_stamps = np.arange(0, timestamps[-1], self.interval)
-        print(f"old=({timestamps.size}) {timestamps}, new=({new_stamps.size}){new_stamps}")
+    def __call__(self, a):
+        """
+        array: [timestamps, data1, data2...]
+        """
+        timestamps = a[:,0]
+        new_stamps = np.arange(timestamps[0], timestamps[-1], self.interval)
+        ret = new_stamps
+        for i in range(1, a.shape[1]):  # 
+            interp = interp1d(timestamps, a[:,i])
+            new_vals = interp(new_stamps)
+            ret = np.vstack((ret, new_vals))
+        return ret.T
 
-        new_vals = interp(new_stamps)
-        return np.vstack((new_stamps, new_vals)).T
     @staticmethod
-
     def get_average_interval(timestamps):
         avg_interval = np.average([ timestamps[i] - timestamps[i-1] for i in range(1, len(timestamps))])
         return avg_interval
