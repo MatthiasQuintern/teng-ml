@@ -48,7 +48,7 @@ class Datasample:
 
     def _load_data(self):
         df = pd.read_csv(self.datapath)
-        self.data = df.to_numpy()
+        self.data = df.to_numpy(dtype=np.float32)
 
     def get_data(self):
         """[[timestamps, idata, vdata]]"""

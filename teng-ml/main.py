@@ -51,7 +51,7 @@ if __name__ == "__main__":
     # test_loader = iter(DataLoader(test_set))
     train_loader = iter(DataLoader(train_set, batch_size=3, shuffle=True))
     test_loader = iter(DataLoader(test_set, batch_size=3, shuffle=True))
-
+# , dtype=torch.float32
     sample = next(train_loader)
     print(sample)
 
@@ -74,21 +74,22 @@ if __name__ == "__main__":
 
 
         def forward(self, x):
+            # x: batches, length, features
             print(f"forward pass")
             D = 2 if self.if_bidirectional == True else 1
 
-            print(f"x({x.shape})={x}")
-            batch_size = x.shape[1]
+            print(f"x({x.shape})=...")
+            batch_size = x.shape[0]
             print(f"batch_size={batch_size}")
 
             h0 = torch.zeros(D * self.num_layers, batch_size, self.hidden_size).to(device)
-            print(f"h0={h0}")
+            print(f"h0({h0.shape})=...")
             c0 = torch.zeros(D * self.num_layers, batch_size, self.hidden_size).to(device)
             x.to(device)
             _, (h_n, _) = self.lstm(x, (h0, c0))
-            print(f"h_n={h_n}")
+            print(f"h_n({h_n.shape})=...")
             final_state  = h_n.view(self.num_layers, D, batch_size, self.hidden_size)[-1]     # num_layers, num_directions, batch, hidden_size
-            print(f"final_state={final_state}")
+            print(f"final_state({final_state.shape})=...")
 
             if D == 1:
               X = final_state.squeeze()
@@ -99,7 +100,7 @@ if __name__ == "__main__":
             else:
                 raise ValueError("D must be 1 or 2")
             output = self.fc(X) # fully-connected layer
-            print(f"out={output}")
+            print(f"out({output.shape})={output}")
 
             return output
 
@@ -119,18 +120,20 @@ if __name__ == "__main__":
         for data, y in train_loader:
             # data = batch, seq, features
             print(ep, "Train")
-            print(f"data({data.shape})={data}")
-            x = data[:,:,2]   # select voltage data
-            print(f"x({x.shape})={x}")
-            length = torch.tensor([x.shape[1] for _ in range(x.shape[0])], dtype=torch.int64)
-            print(f"length({length.shape})={length}")
-            batch_size = x.shape[0]
-            print(f"batch_size={batch_size}")
-            v = x.view(batch_size, -1, feature_count)
-            data = rnn_utils.pack_padded_sequence(v.type(torch.FloatTensor), length, batch_first=True).to(device)[0]
+            # print(f"data({data.shape})={data}")
+            x = data[:,:,[2]].float()   # select voltage data
+            print(f"x({x.shape}, {x.dtype})=...")
+            print(f"y({y.shape}, {y.dtype})=...")
+            # length = torch.tensor([x.shape[1] for _ in range(x.shape[0])], dtype=torch.int64)
+            # print(f"length({length.shape})={length}")
+            # batch_size = x.shape[0]
+            # print(f"batch_size={batch_size}")
+            # v = x.view(batch_size, -1, feature_count)
+            # data = rnn_utils.pack_padded_sequence(v.type(torch.FloatTensor), length, batch_first=True).to(device)[0]
+            # print(f"data({data.shape})={data}")
             # print(data.batch_sizes[0])
             # print(data)
-            out = model(data)
+            out = model(x)
             loss = loss_func(out, y)
             # print(loss)
 
@@ -146,15 +149,15 @@ if __name__ == "__main__":
 
         for data, y in test_loader:
             print(ep, "Test")
-            x = data[:,2]
+            x = data[:,:,[2]]
             print(f"x({x.shape})={x}")
-            length = torch.tensor(x.shape[0], dtype=torch.int64)
-            print(f"length={length}")
-            batch_size = x.shape[0]
-            print(f"batch_size={batch_size}")
-            v = x.view(batch_size, -1, feature_count)
-            data = rnn_utils.pack_padded_sequence(v.type(torch.FloatTensor), length, batch_first=True).to(device)
-            out = model(data)
+            # length = torch.tensor(x.shape[1], dtype=torch.int64)
+            # print(f"length={length}")
+            # batch_size = x.shape[0]
+            # print(f"batch_size={batch_size}")
+            # v = x.view(batch_size, -1, feature_count)
+            # data = rnn_utils.pack_padded_sequence(v.type(torch.FloatTensor), length, batch_first=True).to(device)
+            out = model(x)
             loss = loss_func(out, y)
 
             predicted = torch.max(torch.nn.functional.softmax(out), 1)[1]
