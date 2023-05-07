@@ -13,9 +13,14 @@ import torch
 import torch.nn as nn
 import torch.nn.utils.rnn as rnn_utils
 from torch.utils.data import DataLoader
+import json
+import time
+import pickle
 
 from .util.transform import ConstantInterval, Normalize
 from .util.data_loader import load_datasets, LabelConverter
+from .util.epoch_tracker import EpochTracker
+from .util.settings import MLSettings
 
 def test_interpol():
     file = "/home/matth/data/2023-04-27_glass_8.2V_179mm000.csv"
@@ -40,31 +45,31 @@ if __name__ == "__main__":
         if torch.backends.mps.is_available()
         else "cpu"
     )
-    print(f"Using device: {device}")
 
-    settings = {}
 
     labels = LabelConverter(["foam", "glass", "kapton", "foil", "cloth", "rigid_foam"])
     t_const_int = ConstantInterval(0.01)
     t_norm = Normalize(0, 1)
-
     transforms = [ t_const_int, t_norm ]
+    st = MLSettings(num_features=1,
+                    num_layers=1,
+                    hidden_size=1,
+                    bidirectional=True,
+                    transforms=transforms,
+                    num_epochs=40,
+                    batch_size=3,
+                    labels=labels,
+                )
 
-    settings["transforms"] = str(transforms)
+    print(f"Using device: {device}")
 
-    train_set, test_set = load_datasets("/home/matth/Uni/TENG/data", labels, voltage=8.2, transforms=[t_const_int], train_to_test_ratio=0.7, random_state=42)
+
+    train_set, test_set = load_datasets("/home/matth/Uni/TENG/data", labels, voltage=8.2, transforms=st.transforms, train_to_test_ratio=0.7, random_state=42)
 
     # train_loader = iter(DataLoader(train_set))
     # test_loader = iter(DataLoader(test_set))
-    train_loader = DataLoader(train_set, batch_size=3, shuffle=True)
-    test_loader = DataLoader(test_set, batch_size=3, shuffle=True)
-# , dtype=torch.float32
-    # sample = next(train_loader)
-    # print(sample)
-
-    feature_count = 1
-    settings["feature_count"] = str(feature_count)
-
+    train_loader = DataLoader(train_set, batch_size=st.batch_size, shuffle=True)
+    test_loader = DataLoader(test_set, batch_size=st.batch_size, shuffle=True)
 
     class RNN(nn.Module):
         def __init__(self, input_size, hidden_size, num_layers, num_classes, bidirectional):
@@ -115,7 +120,7 @@ if __name__ == "__main__":
             # print(f"out({output.shape})={output}")
             return output
 
-    model=RNN(input_size=1, hidden_size=8, num_layers=3, num_classes=len(labels), bidirectional=True).to(device)
+    model=RNN(input_size=st.num_features, hidden_size=st.hidden_size, num_layers=st.num_layers, num_classes=len(labels), bidirectional=st.bidirectional).to(device)
     loss_func = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.02)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
@@ -125,14 +130,19 @@ if __name__ == "__main__":
     print(f"optimizer={optimizer}")
     print(f"scheduler={scheduler}")
 
-    num_epochs = 10
+
+
+    epoch_tracker = EpochTracker(labels)
+
+    print(f"train_loader")
+    for i, (data, y) in enumerate(train_loader):
+        print(y)
+        print(f"{i:3} - {torch.argmax(y, dim=1, keepdim=False)}")
+
 
 # training 
-    for ep in range(num_epochs):
-        train_correct = 0
-        train_total = 0
-        val_correct = 0
-        val_total = 0
+    epoch_tracker.train_begin()
+    for ep in range(st.num_epochs):
         for i, (data, y) in enumerate(train_loader):
             # print(data, y)
             # data = batch, seq, features
@@ -160,13 +170,15 @@ if __name__ == "__main__":
 
             # predicted = torch.max(torch.nn.functional.softmax(out), 1)[1]
             predicted = torch.argmax(out, dim=1, keepdim=False)  # -> [ label_indices ]
-            actual = torch.argmax(y, dim=1, keepdim=False)  # -> [ label_indices ]
-            # print(f"predicted={predicted}, actual={actual}")
-            train_total += y.size(0)
-            train_correct += (predicted == actual).sum().item()
-
-        print(f"epoch={ep+1:3}: Training accuracy={100 * train_correct / train_total:.2f}%, loss={loss:3f}")
+            correct = torch.argmax(y, dim=1, keepdim=False)  # -> [ label_indices ]
+            # print(f"predicted={predicted}, correct={correct}")
+            # train_total += y.size(0)
+            # train_correct += (predicted == correct).sum().item()
+            epoch_tracker.train(correct, predicted)
+        epoch_tracker.next_epoch(loss)
+        print(epoch_tracker.get_last_epoch_summary_str())
         scheduler.step()
+    t_end = time.time()
 
     with torch.no_grad():
         for i, (data, y) in enumerate(test_loader):
@@ -176,20 +188,34 @@ if __name__ == "__main__":
             loss = loss_func(out, y)
 
             predicted = torch.argmax(out, dim=1, keepdim=False)  # -> [ label_indices ]
-            actual = torch.argmax(y, dim=1, keepdim=False)  # -> [ label_indices ]
-            # print(f"predicted={predicted}, actual={actual}")
-            val_total += y.size(0)
-            val_correct += (predicted == actual).sum().item()
+            correct = torch.argmax(y, dim=1, keepdim=False)  # -> [ label_indices ]
+            # print(f"predicted={predicted}, correct={correct}")
+            # val_total += y.size(0)
+            # val_correct += (predicted == correct).sum().item()
+
+            epoch_tracker.test(correct, predicted)
 
         # print(f"train_total={train_total}, val_total={val_total}")
-        if train_total == 0: train_total = -1
-        if val_total == 0: val_total = -1
+        # if train_total == 0: train_total = -1
+        # if val_total == 0: val_total = -1
 
-        print(f"epoch={ep+1:3}: Testing accuracy={100 * val_correct / val_total:.2f}")
-    print(f"End result: Training accuracy={100 * train_correct / train_total:.2f}%, Testing accuracy={100 * val_correct / val_total:.2f}")
-    settings["model"] = str(model)
+        # print(f"epoch={ep+1:3}: Testing accuracy={100 * val_correct / val_total:.2f}")
+    # print(f"End result: Training accuracy={100 * train_correct / train_total:.2f}%, Testing accuracy={100 * val_correct / val_total:.2f}, training took {t_end - t_begin:.2f} seconds")
 
-    with open("settings.txt", "w") as file:
-        file.write(str(settings))
+    epoch_tracker.get_test_statistics()
+    # epoch_tracker.()
 
+    # print(epoch_tracker.get_training_summary_str())
+    print(epoch_tracker.get_training_count_per_label())
+
+    model_name = st.get_name()
+    # save the settings, results and model
+    with open(model_name + "_settings.pkl", "wb") as file:
+        pickle.dump(st, file)
+
+    with open(model_name + "_results.pkl", "wb") as file:
+        pickle.dump(epoch_tracker, file)
+
+    with open(model_name + "_model.pkl", "wb") as file:
+        pickle.dump(model, file)
 

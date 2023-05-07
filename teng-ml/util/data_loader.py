@@ -7,7 +7,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 # groups: date, name, voltage, distance, index
-re_filename = r"(\d{4}-\d{2}-\d{2})_([a-zA-Z]+)_(\d{1,2}(?:\.\d*)?)V_(\d+(?:\.\d*)?)mm(\d+).csv"
+re_filename = r"(\d{4}-\d{2}-\d{2})_([a-zA-Z_]+)_(\d{1,2}(?:\.\d*)?)V_(\d+(?:\.\d*)?)mm(\d+).csv"
 
 class LabelConverter:
     def __init__(self, class_labels):
@@ -46,7 +46,7 @@ class Datasample:
         self.data = None
 
     def __repr__(self):
-        size = self.data.size if self.data else "Unknown"
+        size = self.data.size if self.data is not None else "Unknown"
         return f"{self.label}-{self.index}: dimension={size}, recorded at {self.date} with U={self.voltage}V, d={self.distance}mm"
 
     def _load_data(self):
@@ -71,13 +71,14 @@ class Dataset:
 
     def __getitem__(self, index):
         data, label = self.datasamples[index].get_data(), self.datasamples[index].label_vec
+        # print(f"loading dataset {self.datasamples[index]}")
         if type(self.transforms) == list:
             for t in self.transforms:
                 data = t(data)
         elif self.transforms:
             data = self.transforms(data)
         # TODO
-        return data[:400], label
+        return data[:2000], label
 
     def __len__(self):
         return len(self.datasamples)
