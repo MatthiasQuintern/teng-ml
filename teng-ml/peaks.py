@@ -17,6 +17,7 @@ if __name__ == "__main__":
         sys.path.insert(0, path.dirname(path.dirname(filepath)))
 
 from .util.transform import Normalize
+from .util.data_loader import get_datafiles
 
 file = "/home/matth/data/2023-04-25_kapton_8.2V_179mm002.csv"
 

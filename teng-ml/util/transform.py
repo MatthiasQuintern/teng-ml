@@ -54,4 +54,3 @@ class ConstantInterval:
 
     def __repr__(self):
         return f"ConstantInterval(interval={self.interval})"
-
