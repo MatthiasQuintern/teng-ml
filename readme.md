@@ -1,4 +1,4 @@
-# Machine Learning stuff for TENG project
+# Machine learning for material recognition with a TENG
 (Bi)LSTM for name classification.  
 More information on the project are [on my website](https://quintern.xyz/en/teng.html).
 
