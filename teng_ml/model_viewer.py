@@ -7,7 +7,7 @@ from sys import exit, argv
 if __name__ == "__main__":
     if __package__ is None:
         # make relative imports work as described here: https://peps.python.org/pep-0366/#proposed-change
-        __package__ = "teng-ml"
+        __package__ = "teng_ml"
         import sys
         from os import path
         filepath = path.realpath(path.abspath(__file__))
@@ -17,7 +17,6 @@ from .tracker.epoch_tracker import EpochTracker
 from .util.settings import MLSettings
 from .util import model_io as mio
 from .util.string import cleanup_str, fill_and_center
-
 
 cache = {}
 
@@ -53,8 +52,6 @@ def resave_images_svg(model_dirs):
         fig, _ = train_tracker.plot_predictions("Training: Predictions", model_dir=model_dir, name="img_training_predictions")
         fig, _ = train_tracker.plot_training(model_dir=model_dir)
         plt.close('all')
-
-
 
 #
 # MODEL RANKING
@@ -265,7 +262,7 @@ q:  quit
 
 
 
-if __name__ == "__main__":
+def main():
     if len(argv) != 2:
         print(f"Exactly one argument (models directory) is required, but got {len(argv)-1}.")
         exit(1)
@@ -314,3 +311,6 @@ if __name__ == "__main__":
                 print_options()
     except KeyboardInterrupt: pass
     except EOFError: pass
+
+if __name__ == "__main__":
+    main()

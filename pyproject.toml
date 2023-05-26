@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools"]
+
+[project]
+name = "teng_ml"
+version = "1.0.0"
+description = "Material recognition for triboelectric nanogenerators"
+requires-python = ">=3.10"
+readme = "readme.md"
+license = {file = "LICENSE"}
+authors = [
+    { name = "Matthias Quintern", email = "matthias@quintern.xyz" }
+]
+classifiers = [
+    "Operating System :: POSIX :: Linux",
+    "Environment :: Console",
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+]
+dependencies = [
+    "matplotlib>=3.6",
+    "numpy",
+    "torch",
+    "scikit-learn"
+]
+
+[project.urls]
+repository = "https://git.quintern.xyz/MatthiasQuintern/teng-ml"
+
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[project.scripts]
+teng-model-viewer = "teng_ml.model_viewer:main"

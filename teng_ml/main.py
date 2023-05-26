@@ -1,7 +1,7 @@
 if __name__ == "__main__":
     if __package__ is None:
         # make relative imports work as described here: https://peps.python.org/pep-0366/#proposed-change
-        __package__ = "teng-ml"
+        __package__ = "teng_ml"
         import sys
         from os import path
         filepath = path.realpath(path.abspath(__file__))
@@ -41,7 +41,7 @@ def test_interpol():
 
 
 if __name__ == "__main__":
-    labels = LabelConverter(["foam", "glass", "kapton", "foil", "cloth", "rigid_foam"])
+    labels = LabelConverter(["white_foam", "glass", "Kapton", "bubble_wrap", "cloth", "black_foam"])
     models_dir = "/home/matth/Uni/TENG/models"  # where to save models, settings and results
     if not path.isdir(models_dir):
         makedirs(models_dir)
@@ -83,7 +83,7 @@ if __name__ == "__main__":
         # lambda model: torch.optim.Adam(model.parameters(), lr=0.50),
     ]
     schedulers = [
-        lambda optimizer, st: torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9),
+        # lambda optimizer, st: torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9),
         lambda optimizer, st: torch.optim.lr_scheduler.StepLR(optimizer, step_size=st.num_epochs // 10, gamma=0.40, verbose=False),
         # lambda optimizer, st: torch.optim.lr_scheduler.StepLR(optimizer, step_size=st.num_epochs // 10, gamma=0.75, verbose=False),
     ]
@@ -115,7 +115,7 @@ if __name__ == "__main__":
                 model, optimizer, scheduler = create_model(st, optimizers[o], schedulers[s])
                 device = select_device(force_device="cpu")
                 try:
-                    train_validate_save(model, optimizer, scheduler, loss_func, train_loader, test_loader, st, models_dir, print_interval=4)
+                    train_validate_save(model, optimizer, scheduler, loss_func, train_loader, test_loader, st, models_dir, print_interval=1)
                 except KeyboardInterrupt:
                     if input("Cancelled current training. Quit? (q/*): ") == "q":
                         t_end = time.time()

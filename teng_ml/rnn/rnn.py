@@ -11,29 +11,32 @@ class RNN(nn.Module):
         self.hidden_size = hidden_size
         self.is_bidirectional = bidirectional
         self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, batch_first=True, bidirectional=bidirectional)
-        # x = (batch_size, sequence, feature)
-
         if bidirectional == True:
           self.fc = nn.Linear(hidden_size * 2, num_classes)
         else:
           self.fc = nn.Linear(hidden_size, num_classes)
 
         self.softmax = nn.Softmax(dim=1)
+        self.D = 2 if self.is_bidirectional == True else 1
 
     def forward(self, x):
-        # x: batches, length, features
-        # print(f"forward pass")
-        D = 2 if self.is_bidirectional == True else 1
-        # print(f"x({x.shape})=...")
-        batch_size = x.shape[0]
-
         device = x.device
 
-        h0 = torch.zeros(D * self.num_layers, batch_size, self.hidden_size).to(device)
-        # print(f"h1({h0.shape})=...")
-        c0 = torch.zeros(D * self.num_layers, batch_size, self.hidden_size).to(device)
+        # h0: initial hidden states
+        # c0: initial cell states
+        if len(x.shape) == 2:  # x: (seq_length, features)
+            h0 = torch.zeros(self.D * self.num_layers, self.hidden_size).to(device)
+            c0 = torch.zeros(self.D * self.num_layers, self.hidden_size).to(device)
+        elif len(x.shape) == 3:   # x: (batch, seq_length, features)
+            batch_size = x.shape[0]
+            h0 = torch.zeros(self.D * self.num_layers, batch_size, self.hidden_size).to(device)
+            c0 = torch.zeros(self.D * self.num_layers, batch_size, self.hidden_size).to(device)
+        else:
+            raise ValueError(f"RNN.forward: invalid iput shape: {x.shape}. Must be (batch, seq_length, features) or (seq_length, features)")
 
+        # lstm: (batch_size, seq_length, features) -> (batch_size, hidden_size)
         out, (h_n, c_n) = self.lstm(x, (h0, c0))
+        print(f"forward: out.shape={out.shape} TODO verify comment")
         # out: (N, L, D * hidden_size)
         # h_n: (D * num_layers, hidden_size)
         # c_n: (D * num_layers, hidden_size)
@@ -59,22 +62,9 @@ class RNN(nn.Module):
         """  # all this is quivalent to line below
         out = out[:,-1,:]  # select last time step
 
-        # fc: (*, hidden_size) -> (*, num_classes)
-        # print(f"X({X.shape})={X}")
-        # print(f"X({X.shape})=...")
-        out = self.fc(out) # fully-connected layer
-        # print(f"out({output.shape})={output}")
-        # print(f"output({output.shape})=...")
-        # softmax: (*) -> (*)
-        # out = self.softmax(out)
-        # print(f"output({output.shape})=...")
-        # print(f"output({output.shape})={output}")
+        # fc fully connected layer: (*, hidden_size) -> (*, num_classes)
+        out = self.fc(out)
 
-        """
-        out(torch.Size([15, 200, 10]))=...
-        h_n(torch.Size([3, 15, 10]))=...
-        c_n(torch.Size([3, 15, 10]))=...
-        X(torch.Size([3, 1, 15, 10]))=...
-        output(torch.Size([3, 1, 15, 6]))=...
-        output(torch.Size([3, 1, 15, 6]))=..."""
+        # softmax: (*) -> (*)
+        out = self.softmax(out)
         return out
