@@ -10,7 +10,7 @@ from sys import exit
 if __name__ == "__main__":
     if __package__ is None:
         # make relative imports work as described here: https://peps.python.org/pep-0366/#proposed-change
-        __package__ = "teng-ml"
+        __package__ = "teng_ml"
         import sys
         from os import path
         filepath = path.realpath(path.abspath(__file__))
