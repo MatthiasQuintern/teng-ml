@@ -43,6 +43,7 @@ class Datasample:
     def __init__(self, date: str, label: str, voltage: str, distance: str, index: str, label_vec, datapath: str, init_data=False):
         self.date = date
         self.label = label
+        self.n_object = n_object
         self.voltage = float(voltage)
         self.distance = float(distance)
         self.index = int(index)
