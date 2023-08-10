@@ -19,52 +19,59 @@ class RNN(nn.Module):
         self.softmax = nn.Softmax(dim=1)
         self.D = 2 if self.is_bidirectional == True else 1
 
-    def forward(self, x):
-        device = x.device
+    def forward(self, x, unpadded_lengths=None):
+        """
+        @param x:
+            Tensor (seq_length, features) for unbatched inputs
+            Tensor (batch_size, seq_length, features) for batch inputs
+            PackedSequence for padded batched inputs
+        @param unpadded_lengths: Tensor(batch_size) with lengths of the unpadded sequences, when using padding but without PackedSequence
+        @returns (batch_size, num_classes)  with batch_size == 1 for unbatched inputs
+        """
+        # if type(x) == torch.Tensor:
+        #     device = x.device
+        #     # h0: initial hidden states
+        #     # c0: initial cell states
+        #     if len(x.shape) == 2:  # x: (seq_length, features)
+        #         h0 = torch.zeros(self.D * self.num_layers, self.hidden_size).to(device)
+        #         c0 = torch.zeros(self.D * self.num_layers, self.hidden_size).to(device)
+        #     elif len(x.shape) == 3:   # x: (batch, seq_length, features)
+        #         batch_size = x.shape[0]
+        #         h0 = torch.zeros(self.D * self.num_layers, batch_size, self.hidden_size).to(device)
+        #         c0 = torch.zeros(self.D * self.num_layers, batch_size, self.hidden_size).to(device)
+        #     else:
+        #         raise ValueError(f"RNN.forward: invalid input shape: {x.shape}. Must be (batch, seq_length, features) or (seq_length, features)")
+        # elif type(x) == nn.utils.rnn.PackedSequence:
+        #     device = x.data.device
+        #     h0 = torch.zeros(self.D * self.num_layers, self.hidden_size).to(device)
+        #     c0 = torch.zeros(self.D * self.num_layers, self.hidden_size).to(device)
+        # else:
+        #     raise ValueError(f"RNN.forward: invalid input type: {type(x)}. Must be Tensor or PackedSequence")
 
-        # h0: initial hidden states
-        # c0: initial cell states
-        if len(x.shape) == 2:  # x: (seq_length, features)
-            h0 = torch.zeros(self.D * self.num_layers, self.hidden_size).to(device)
-            c0 = torch.zeros(self.D * self.num_layers, self.hidden_size).to(device)
-        elif len(x.shape) == 3:   # x: (batch, seq_length, features)
-            batch_size = x.shape[0]
-            h0 = torch.zeros(self.D * self.num_layers, batch_size, self.hidden_size).to(device)
-            c0 = torch.zeros(self.D * self.num_layers, batch_size, self.hidden_size).to(device)
-        else:
-            raise ValueError(f"RNN.forward: invalid iput shape: {x.shape}. Must be (batch, seq_length, features) or (seq_length, features)")
 
         # lstm: (batch_size, seq_length, features) -> (batch_size, hidden_size)
-        out, (h_n, c_n) = self.lstm(x, (h0, c0))
-        print(f"forward: out.shape={out.shape} TODO verify comment")
-        # out: (N, L, D * hidden_size)
-        # h_n: (D * num_layers, hidden_size)
-        # c_n: (D * num_layers, hidden_size)
-        # print(f"out({out.shape})={out}")
-        # print(f"h_n({h_n.shape})={h_n}")
-        # print(f"c_n({c_n.shape})={c_n}")
-        # print(f"out({out.shape})=...")
-        # print(f"h_n({h_n.shape})=...")
-        # print(f"c_n({c_n.shape})=...")
+        # or:   packed_sequence -> packed_sequence
+        # out, (h_n, c_n) = self.lstm(x, (h0, c0))
+        out, (h_n, c_n) = self.lstm(x)  # (h0, c0) defaults to zeros
 
-        """
-        # select only last layer [-1] -> last layer,
-        last_layer_state  = h_n.view(self.num_layers, D, batch_size, self.hidden_size)[-1]
-        if D == 1:
-            # [1, batch_size, hidden_size] -> [batch_size, hidden_size]
-            X = last_layer_state.squeeze()           # TODO what if batch_size == 1
-        elif D == 2:
-            h_1, h_2 = last_layer_state[0], last_layer_state[1]   # states of both directions
-            # concatenate both states, X-size: (Batch, hidden_size * 2）
-            X = torch.cat((h_1, h_2), dim=1)
+        # select the last state of lstm's neurons
+        if type(out) == nn.utils.rnn.PackedSequence:
+            # padding has to be considered
+            out, lengths = nn.utils.rnn.pad_packed_sequence(out, batch_first=True)
+            # the unpadded length of batch i is lengths[i], so that is the last non-zero state
+            out = torch.stack([out[i,lengths[i].item()-1,:] for i in range(len(lengths))])
+        elif unpadded_lengths is not None:
+            out = torch.stack([out[i,unpadded_lengths[i].item()-1,:] for i in range(len(unpadded_lengths))])
         else:
-            raise ValueError("D must be 1 or 2")
-        """  # all this is quivalent to line below
-        out = out[:,-1,:]  # select last time step
+            if out.shape[0] == 3:  # batched
+                out = out[:,-1,:]
+            else:  # unbatched
+                # softmax requires (batch_size, *)
+                out = torch.stack([out[-1,:]])
 
         # fc fully connected layer: (*, hidden_size) -> (*, num_classes)
         out = self.fc(out)
 
-        # softmax: (*) -> (*)
+        # softmax: (batch_size, *) -> (batch_size, *)
         out = self.softmax(out)
         return out

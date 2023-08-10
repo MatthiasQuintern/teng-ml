@@ -13,23 +13,48 @@ def fill_and_center(s: str, fill_char="=", length=100):
     else:
         return s
 
+
 def class_str(x):
     """
     Return the constructor of the class of x with arguemnts
     """
     name = type(x).__name__
-    signature = inspect.signature(type(x))
     params = []
-    for param_name, param_value in x.__dict__.items():
-        if param_name not in signature.parameters:
-            continue
-        default_value = signature.parameters[param_name].default
-        if param_value != default_value:
-            params.append(f"{param_name}={param_value!r}")
+    try:
+        signature = inspect.signature(type(x))
+        for param_name, param_value in x.__dict__.items():
+            if param_name not in signature.parameters:
+                continue
+            default_value = signature.parameters[param_name].default
+            if param_value != default_value:
+                params.append(f"{param_name}={param_value!r}")
+    except ValueError:
+        pass
     if params:
         return f"{name}({', '.join(params)})"
     else:
         return name
+
+
+def optimizer_str(x):
+    # optimizer stores everything in 'defaults' dict and is thus not compatible with class_str
+    name = type(x).__name__
+    params = []
+    try:
+        signature = inspect.signature(type(x))
+        for param_name, param_value in x.__dict__["defaults"].items():
+            if param_name not in signature.parameters:
+                continue
+            default_value = signature.parameters[param_name].default
+            if param_value != default_value:
+                params.append(f"{param_name}={param_value!r}")
+    except ValueError:
+        pass
+    if params:
+        return f"{name}({', '.join(params)})"
+    else:
+        return name
+
 
 
 def cleanup_str(s):

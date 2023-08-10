@@ -4,6 +4,7 @@ import re
 import numpy as np
 import pandas as pd
 from scipy.sparse import data
+import torch
 
 import threading
 
@@ -24,7 +25,13 @@ class LabelConverter:
         vec[self.class_labels.index(label)] = 1.0
         return vec
 
+    def get_label_index(self, one_hot: torch.Tensor):
+        """return one hot vector for given label"""
+        return int(torch.argmax(one_hot).item())
+
     def __getitem__(self, index):
+        if type(index) == torch.Tensor:
+            return self.class_labels[self.get_label_index(index)]
         return self.class_labels[index]
 
     def __contains__(self, value):
@@ -84,8 +91,11 @@ class Dataset:
             if split_function is None:
                 self.data.append((data, sample.label_vec))
             else:
-                for data_split in split_function(data):
-                    self.data.append((data_split, sample.label_vec))
+                try:
+                    for data_split in split_function(data):
+                        self.data.append((data_split, sample.label_vec))
+                except ValueError as e:
+                    raise ValueError(f"Exception occured during splitting of sample '{sample.datapath}': {e}")
 
     def apply_transforms(self, data):
         if type(self.transforms) == list:
@@ -111,7 +121,9 @@ def get_datafiles(datadir, labels: LabelConverter, exclude_n_object=None, filter
     files.sort()
     for file in files:
         match = re.fullmatch(re_filename, file)
-        if not match: continue
+        if not match:
+            print(f"get_datafiles: dropping non matching file '{file}'")
+            continue
 
         label = match.groups()[1]
         if label not in labels: continue
@@ -125,16 +137,16 @@ def get_datafiles(datadir, labels: LabelConverter, exclude_n_object=None, filter
     return datafiles
 
 
-def load_datasets(datadir, labels: LabelConverter, transforms=None, split_function=None, voltage=None, train_to_test_ratio=0.7, random_state=None, num_workers=None):
+def load_datasets(datadir, labels: LabelConverter, transforms=None, split_function=None, exclude_n_object=None, voltage=None, train_to_test_ratio=0.7, random_state=None, num_workers=None):
     """
     load all data from datadir that are in the format: yyyy-mm-dd_label_x.xV_xxxmm.csv
     """
     datasamples = []
     if num_workers == None:
-        for file, match, label in get_datafiles(datadir, labels, voltage):
+        for file, match, label in get_datafiles(datadir, labels, exclude_n_object=exclude_n_object, filter_voltage=voltage):
             datasamples.append(Datasample(*match.groups(), labels.get_one_hot(label), file))
     else:
-        files = get_datafiles(datadir, labels, voltage)
+        files = get_datafiles(datadir, labels, exclude_n_object=exclude_n_object, filter_voltage=voltage)
         def worker():
             while True:
                 try:
@@ -155,3 +167,30 @@ def load_datasets(datadir, labels: LabelConverter, transforms=None, split_functi
     train_dataset = Dataset(train_samples, transforms=transforms, split_function=split_function)
     test_dataset = Dataset(test_samples, transforms=transforms, split_function=split_function)
     return train_dataset, test_dataset
+
+
+def count_data(data_loader, label_converter: LabelConverter, print_summary=False):
+    """
+    @param data_loader: unbatched data loader
+    """
+    n_sequences = 0  # count number of sequences
+    labels = [ 0 for _ in range(len(label_converter)) ]     # count number of sequences per label
+    len_data = [ 0 for _ in range(len(label_converter)) ]   # count number of datapoints per label
+    for i, (data, y) in enumerate(data_loader):
+        n_sequences = i
+        label_i = label_converter.get_label_index(y)
+        len_data[label_i] += data.shape[0]
+        labels[label_i] += 1
+    if print_summary:
+        print("=" * 50)
+        print("Dataset summary" + f" for {print_summary}:" if type(print_summary) == str else ":")
+        print(f"Number of sequences: {n_sequences}")
+        for i in range(len(label_converter)):
+            print(f"- {label_converter[i]:15}: {labels[i]:3} sequences, {len_data[i]:5} datapoints")
+
+    return n_sequences, labels, len_data
+
+
+
+
+
