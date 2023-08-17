@@ -21,7 +21,8 @@ dependencies = [
     "matplotlib>=3.6",
     "numpy",
     "torch",
-    "scikit-learn"
+    "scikit-learn",
+    "pandas",
 ]
 
 [project.urls]
