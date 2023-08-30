@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.interpolate import interp1d
+from torch import mul
 
 class Normalize:
     """
@@ -39,6 +40,15 @@ class NormalizeAmplitude:
         return data
     def __repr__(self):
         return f"NormalizeAmplitude(high={self.high})"
+
+
+class Multiply:
+    def __init__(self, multiplier):
+        self.multiplier = multiplier
+    def __call__(self, data):
+        return data * self.multiplier
+    def __repr__(self):
+        return f"Multiply(multiplier={self.multiplier})"
 
 
 class ConstantInterval:
