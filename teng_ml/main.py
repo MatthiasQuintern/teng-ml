@@ -42,9 +42,10 @@ def test_interpol():
 
 
 if __name__ == "__main__":
-    labels = LabelConverter(["foam_PDMS_white", "foam_PDMS_black", "foam_PDMS_TX100", "foam_PE", "antistatic_foil", "cardboard", "glass", "kapton", "bubble_wrap_PE", "fabric_PP", ])
-    # labels = LabelConverter(["foam_PDMS_white", "foam_PDMS_black", "foam_PDMS_TX100", "foam_PE", "kapton", "bubble_wrap_PE", "fabric_PP", ])
-    models_dir = "/home/matth/Uni/TENG/teng_2/models_gen_12"  # where to save models, settings and results
+    # labels = LabelConverter(["foam_PDMS_white", "foam_PDMS_black", "foam_PDMS_TX100", "foam_PE", "antistatic_foil", "cardboard", "glass", "kapton", "bubble_wrap_PE", "fabric_PP" ])
+    labels = LabelConverter(["foam_PDMS_white", "foam_PDMS_black", "foam_PDMS_TX100", "foam_PE", "antistatic_foil", "cardboard", "kapton", "bubble_wrap_PE", "fabric_PP" ])
+    # labels = LabelConverter(["foam_PDMS_white", "foam_PDMS_black", "foam_PDMS_TX100", "foam_PE", "kapton", "bubble_wrap_PE", "fabric_PP" ])
+    models_dir = "/home/matth/Uni/TENG/teng_2/models_gen_15"  # where to save models, settings and results
     if not path.isdir(models_dir):
         makedirs(models_dir)
     data_dir = "/home/matth/Uni/TENG/teng_2/sorted_data"
@@ -53,18 +54,18 @@ if __name__ == "__main__":
     # gen_6 best options: no glass, cardboard and antistatic_foil, not bidirectional, lr=0.0007, no datasplitter, 2 layers n_hidden = 10
 
     # Test with
-    num_layers = [ 2, 3 ]
-    hidden_size = [ 21, 28 ]
-    bidirectional = [ False, True ]
+    num_layers = [ 4, 5 ]
+    hidden_size = [ 28, 36 ]
+    bidirectional = [ True ]
     t_const_int = ConstantInterval(0.01)  # TODO check if needed: data was taken at equal rate, but it isnt perfect -> maybe just ignore?
     t_norm = Normalize(-1, 1)
-    transforms = [[ t_norm ]]  #, [ t_norm, t_const_int ]]
+    transforms = [[]] #, [ t_norm, t_const_int ]]
     batch_sizes = [ 4 ]
     splitters = [ DataSplitter(50, drop_if_smaller_than=30) ]  # smallest file has length 68 TODO: try with 0.5-1second snippets
     num_epochs = [ 80 ]
     # (epoch, min_accuracy)
-    training_cancel_points = [(15, 20),  (40, 25)]
-    # training_cancel_points = []
+    # training_cancel_points = [(15, 20),  (40, 25)]
+    training_cancel_points = []
 
     args = [num_layers, hidden_size, bidirectional, [None], [None], [None], transforms, splitters, num_epochs, batch_sizes]
 
@@ -81,7 +82,7 @@ if __name__ == "__main__":
         None,
         # lambda optimizer, st: torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9),
         # lambda optimizer, st: torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.5),
-        lambda optimizer, st: torch.optim.lr_scheduler.StepLR(optimizer, step_size=st.num_epochs // 8, gamma=0.60, verbose=False),
+        # lambda optimizer, st: torch.optim.lr_scheduler.StepLR(optimizer, step_size=st.num_epochs // 8, gamma=0.60, verbose=False),
         # lambda optimizer, st: torch.optim.lr_scheduler.StepLR(optimizer, step_size=st.num_epochs // 10, gamma=0.75, verbose=False),
     ]
 
